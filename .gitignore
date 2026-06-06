@@ -1,0 +1,13 @@
+node_modules
+dist
+data
+# Third-party reference userscripts (OGLight, InfoCompte) — not redistributed; see README.
+vendor
+.codex-logs
+.env
+.env.*
+!.env.example
+.DS_Store
+*.local
+*.tsbuildinfo
+apps/web/.vite
