@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   foldImports,
   type HistoryEntry,
@@ -16,9 +17,15 @@ export interface AccountRef {
   playerId: string;
 }
 
-/** Resolve the storage root: $OGAME_DATA_DIR or ./data relative to the process cwd. */
+/**
+ * Resolve the storage root: `$OGAME_DATA_DIR` (absolute), else `apps/api/data`.
+ * Anchored to this module's location (not `process.cwd()`) so the store is the same
+ * place whether the server is launched from the repo root or from `apps/api`.
+ */
 export function defaultDataDir(): string {
-  return process.env.OGAME_DATA_DIR ?? resolve(process.cwd(), "data");
+  if (process.env.OGAME_DATA_DIR) return process.env.OGAME_DATA_DIR;
+  // this file lives at apps/api/{src,dist}/storage.* -> package root is one dir up.
+  return resolve(dirname(fileURLToPath(import.meta.url)), "..", "data");
 }
 
 /** Keep path segments filesystem-safe (ids like `s1-en` / `100000` pass through unchanged). */

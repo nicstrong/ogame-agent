@@ -44,10 +44,10 @@ Open http://localhost:3000 and use **Import…** to paste an OGLight export.
 
 ## Data
 
-The API stores everything under `./data/` (relative to where the API process starts), partitioned per
-`universe/account`, as an append-only `imports.ndjson` plus a materialized `latest.json`. Override the
-location with `OGAME_DATA_DIR`. The `data/` directory is gitignored — your account data is never
-committed.
+The API stores everything under `apps/api/data/` (a fixed location, regardless of where you launch the
+server), partitioned per `universe/account`, as an append-only `imports.ndjson` plus a materialized
+`latest.json`. Override the location with `OGAME_DATA_DIR` (absolute path). All `data/` directories are
+gitignored — your account data is never committed.
 
 ## Develop
 

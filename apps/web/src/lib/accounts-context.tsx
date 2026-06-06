@@ -10,6 +10,8 @@ interface AccountsContextValue {
   error: string | undefined;
   select: (ref: AccountRef) => void;
   refreshAccounts: () => Promise<AccountRef[]>;
+  /** Re-fetch the account list, clearing any prior error (used by the error Retry). */
+  retry: () => Promise<void>;
   /** After a successful import: reload the list, select the account, load its projection. */
   onImported: (ref: AccountRef) => Promise<void>;
   /** Path currently shown in the history panel (undefined = closed). */
@@ -67,6 +69,15 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 
   const select = useCallback((ref: AccountRef) => setSelected(ref), []);
 
+  const retry = useCallback(async () => {
+    setError(undefined);
+    try {
+      await refreshAccounts();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [refreshAccounts]);
+
   const onImported = useCallback(
     async (ref: AccountRef) => {
       await refreshAccounts();
@@ -88,6 +99,7 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         error,
         select,
         refreshAccounts,
+        retry,
         onImported,
         historyPath,
         openHistory,
