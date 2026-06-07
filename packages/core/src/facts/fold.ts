@@ -37,6 +37,13 @@ function isPrefixPath(prefix: FactPath, path: FactPath): boolean {
   return path === prefix || path.startsWith(prefix + SEP);
 }
 
+/** Structural equality for fact values (JSON leaves/objects). */
+function valuesEqual(a: Json | undefined, b: Json): boolean {
+  if (a === undefined) return false;
+  if (a === b) return true;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 /**
  * Fold imports into a merged projection + per-path history.
  *
@@ -66,8 +73,11 @@ export function foldImports(imports: Import[]): FoldResult {
 
   for (const { fact, importedAt, importId } of flat) {
     if (fact.kind === "set") {
+      // Gate 2 (architecture §3a): record history only when the value actually
+      // changes; routine re-asserts of the same value add no revision.
+      const changed = !valuesEqual(current.get(fact.path), fact.value);
       current.set(fact.path, fact.value);
-      record(fact.path, { importedAt, importId, kind: "set", value: fact.value });
+      if (changed) record(fact.path, { importedAt, importId, kind: "set", value: fact.value });
     } else {
       // tombstone: drop the whole subtree from current state
       // (deleting from a Map during key iteration is safe per spec)

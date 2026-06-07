@@ -1,6 +1,12 @@
 import type { Projection } from "@ogame-agent/core";
 import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
-import { type AccountRef, getProjection, listAccounts, sameAccount } from "@/lib/api";
+import {
+  type AccountRef,
+  getProjection,
+  listAccounts,
+  removeCelestial as removeCelestialApi,
+  sameAccount,
+} from "@/lib/api";
 
 interface AccountsContextValue {
   accounts: AccountRef[];
@@ -12,6 +18,10 @@ interface AccountsContextValue {
   refreshAccounts: () => Promise<AccountRef[]>;
   /** Re-fetch the account list, clearing any prior error (used by the error Retry). */
   retry: () => Promise<void>;
+  /** Re-fetch the selected account's projection (after a mutation). */
+  reloadProjection: () => Promise<void>;
+  /** Remove a celestial (tombstone) then reload the projection. */
+  removeCelestial: (celestialId: string) => Promise<void>;
   /** After a successful import: reload the list, select the account, load its projection. */
   onImported: (ref: AccountRef) => Promise<void>;
   /** Path currently shown in the history panel (undefined = closed). */
@@ -78,6 +88,24 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshAccounts]);
 
+  const reloadProjection = useCallback(async () => {
+    if (!selected) return;
+    try {
+      setProjection(await getProjection(selected));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [selected]);
+
+  const removeCelestial = useCallback(
+    async (celestialId: string) => {
+      if (!selected) return;
+      await removeCelestialApi(selected, celestialId);
+      await reloadProjection();
+    },
+    [selected, reloadProjection],
+  );
+
   const onImported = useCallback(
     async (ref: AccountRef) => {
       await refreshAccounts();
@@ -100,6 +128,8 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         select,
         refreshAccounts,
         retry,
+        reloadProjection,
+        removeCelestial,
         onImported,
         historyPath,
         openHistory,

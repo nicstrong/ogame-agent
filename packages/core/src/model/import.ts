@@ -5,10 +5,10 @@ import { factSchema } from "./fact.js";
 /** Bump when the domain model changes in a way that requires re-folding/migration. */
 export const SCHEMA_VERSION = 1;
 
-export const importSourceSchema = z.enum(["oglight", "infocomplete"]);
+export const importSourceSchema = z.enum(["oglight", "infocomplete", "manual"]);
 export type ImportSource = z.infer<typeof importSourceSchema>;
 
-export const transportSchema = z.enum(["paste", "http"]);
+export const transportSchema = z.enum(["paste", "http", "manual"]);
 export type Transport = z.infer<typeof transportSchema>;
 
 /** v1 is always `owned`; intel reliability tiers come later. */

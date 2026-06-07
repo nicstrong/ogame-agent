@@ -31,6 +31,7 @@ const raw = JSON.stringify(envelope);
 interface ImportResponse {
   ok: boolean;
   deduped: boolean;
+  suppressed: boolean;
   universeId: string;
   accountId: AccountRef;
   celestialCount: number;
@@ -72,12 +73,35 @@ describe("API ingest + storage", () => {
     expect(ndjson.trim().split("\n")).toHaveLength(1);
   });
 
-  it("dedups identical payloads (no second log line)", async () => {
+  it("suppresses a re-import that changes nothing (no second log line)", async () => {
     const res = await app.request("/api/import", { method: "POST", body: raw });
     const json = (await res.json()) as ImportResponse;
-    expect(json.deduped).toBe(true);
+    expect(json.suppressed).toBe(true);
     const ndjson = await readFile(ndjsonPath(), "utf8");
     expect(ndjson.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("suppresses a cosmetic-only change (added lastRefresh)", async () => {
+    const cosmetic = JSON.parse(raw) as typeof envelope;
+    (cosmetic.db.myPlanets["33700001"] as Record<string, unknown>).lastRefresh = 1_700_000_000_000;
+    const res = await app.request("/api/import", {
+      method: "POST",
+      body: JSON.stringify(cosmetic),
+    });
+    const json = (await res.json()) as ImportResponse;
+    expect(json.suppressed).toBe(true);
+    const ndjson = await readFile(ndjsonPath(), "utf8");
+    expect(ndjson.trim().split("\n")).toHaveLength(1);
+  });
+
+  it("admits a real change (building level up)", async () => {
+    const changed = JSON.parse(raw) as typeof envelope;
+    (changed.db.myPlanets["33700001"] as Record<string, number>)["1"] = 11; // metalMine 10 -> 11
+    const res = await app.request("/api/import", { method: "POST", body: JSON.stringify(changed) });
+    const json = (await res.json()) as ImportResponse;
+    expect(json.suppressed).toBe(false);
+    const ndjson = await readFile(ndjsonPath(), "utf8");
+    expect(ndjson.trim().split("\n")).toHaveLength(2);
   });
 
   it("rebuilds an identical projection from the log alone", async () => {
@@ -106,6 +130,35 @@ describe("API ingest + storage", () => {
 
   it("rejects an unrecognized payload with 400", async () => {
     const res = await app.request("/api/import", { method: "POST", body: "{not json" });
+    expect(res.status).toBe(400);
+  });
+
+  it("removes a celestial via a tombstone but keeps its history", async () => {
+    const res = await app.request("/api/accounts/s1-en/100000/tombstone", {
+      method: "POST",
+      body: JSON.stringify({ path: "celestial/33700001" }),
+    });
+    expect(res.status).toBe(200);
+
+    const proj = (await (
+      await app.request("/api/accounts/s1-en/100000/projection")
+    ).json()) as Projection;
+    expect(proj.celestial?.["33700001"]).toBeUndefined(); // planet removed
+    expect(proj.celestial?.["33800001"]).toBeDefined(); // moon remains
+
+    const hist = (await (
+      await app.request(
+        "/api/accounts/s1-en/100000/history?path=celestial/33700001/buildings/metalMine",
+      )
+    ).json()) as { entries: unknown[] };
+    expect(hist.entries.length).toBeGreaterThan(0); // history retained after tombstone
+  });
+
+  it("rejects a tombstone with a bad path", async () => {
+    const res = await app.request("/api/accounts/s1-en/100000/tombstone", {
+      method: "POST",
+      body: JSON.stringify({ path: "account/research/foo" }),
+    });
     expect(res.status).toBe(400);
   });
 });

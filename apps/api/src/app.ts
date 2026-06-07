@@ -1,4 +1,4 @@
-import { parse } from "@ogame-agent/core";
+import { contentHash, type Import, parse, SCHEMA_VERSION, tombstoneFact } from "@ogame-agent/core";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -31,10 +31,11 @@ export function createApp(store: ImportStore = new ImportStore()) {
     }
     try {
       const imp = parse(raw, undefined, { transport: "http" });
-      const { deduped, projection } = await store.ingest(imp);
+      const { deduped, suppressed, projection } = await store.ingest(imp);
       return c.json({
         ok: true,
         deduped,
+        suppressed,
         id: imp.id,
         source: imp.source,
         universeId: imp.universeId,
@@ -73,6 +74,39 @@ export function createApp(store: ImportStore = new ImportStore()) {
 
   app.post("/api/accounts/:universeId/:playerId/rebuild", async (c) => {
     return c.json(await store.rebuildProjection(refFrom(c)));
+  });
+
+  /**
+   * Emit a manual tombstone fact (e.g. the viewer's "remove planet"). Builds a `manual`
+   * import with one tombstone and ingests it; the fold then removes that subtree.
+   */
+  app.post("/api/accounts/:universeId/:playerId/tombstone", async (c) => {
+    const ref = refFrom(c);
+    let body: { path?: unknown };
+    try {
+      body = (await c.req.json()) as { path?: unknown };
+    } catch {
+      return c.json({ ok: false, error: "Invalid JSON body" }, 400);
+    }
+    const path = body.path;
+    if (typeof path !== "string" || !path.startsWith("celestial/")) {
+      return c.json({ ok: false, error: "path must be a string like 'celestial/{id}'" }, 400);
+    }
+    const imp: Import = {
+      id: contentHash(`tombstone:${ref.universeId}/${ref.playerId}:${path}:${Date.now()}`),
+      universeId: ref.universeId,
+      accountId: ref,
+      source: "manual",
+      sourceVersion: "1",
+      transport: "manual",
+      reliability: "owned",
+      importedAt: new Date().toISOString(),
+      schemaVersion: SCHEMA_VERSION,
+      raw: JSON.stringify({ tombstone: path }),
+      facts: [tombstoneFact(path)],
+    };
+    const { projection } = await store.ingest(imp);
+    return c.json({ ok: true, path, projection });
   });
 
   app.notFound((c) => {

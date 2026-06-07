@@ -10,13 +10,16 @@ export { oglightAdapter } from "./oglight.js";
 export { infocompleteAdapter } from "./infocomplete.js";
 export { contentHash } from "./hash.js";
 
-const registry: Record<ImportSource, Adapter> = {
+// `manual` imports (e.g. tombstones from the viewer) are built directly, not parsed.
+const registry: Partial<Record<ImportSource, Adapter>> = {
   oglight: oglightAdapter,
   infocomplete: infocompleteAdapter,
 };
 
 export function adapterFor(source: ImportSource): Adapter {
-  return registry[source];
+  const adapter = registry[source];
+  if (!adapter) throw new Error(`No adapter for source: ${source}`);
+  return adapter;
 }
 
 /**
@@ -28,7 +31,7 @@ export function parse(raw: string, hint?: ImportSource, options?: ParseOptions):
   if (!source) {
     throw new Error("Could not detect import source from payload");
   }
-  return registry[source].parse(raw, options);
+  return adapterFor(source).parse(raw, options);
 }
 
 /** All registered adapters, in detection order. */

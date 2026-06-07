@@ -62,4 +62,26 @@ describe("foldImports", () => {
     const { state } = foldImports([create, remove, recreate]);
     expect((state.celestial as any)["1"].type).toBe("moon");
   });
+
+  it("Gate 2: records history only when a value changes", () => {
+    const imports = [
+      makeImport("a", "2026-01-01T00:00:00Z", [setFact("celestial/1/buildings/metalMine", 10)]),
+      makeImport("b", "2026-01-02T00:00:00Z", [setFact("celestial/1/buildings/metalMine", 10)]), // same
+      makeImport("c", "2026-01-03T00:00:00Z", [setFact("celestial/1/buildings/metalMine", 11)]), // changed
+      makeImport("d", "2026-01-04T00:00:00Z", [setFact("celestial/1/buildings/metalMine", 11)]), // same
+    ];
+    const { state, history } = foldImports(imports);
+    expect((state.celestial as any)["1"].buildings.metalMine).toBe(11);
+    expect(history.get("celestial/1/buildings/metalMine")?.map((h) => h.value)).toEqual([10, 11]);
+  });
+
+  it("Gate 2: a value re-asserted after a tombstone is recorded again", () => {
+    const imports = [
+      makeImport("a", "2026-01-01T00:00:00Z", [setFact("celestial/1/type", "planet")]),
+      makeImport("b", "2026-02-01T00:00:00Z", [tombstoneFact("celestial/1")]),
+      makeImport("c", "2026-03-01T00:00:00Z", [setFact("celestial/1/type", "planet")]), // same value, post-tombstone
+    ];
+    const { history } = foldImports(imports);
+    expect(history.get("celestial/1/type")?.map((h) => h.kind)).toEqual(["set", "set"]);
+  });
 });

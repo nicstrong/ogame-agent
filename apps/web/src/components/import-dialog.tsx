@@ -61,6 +61,7 @@ export function ImportDialog() {
   const [content, setContent] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | undefined>(undefined);
+  const [importNote, setImportNote] = useState<string | undefined>(undefined);
 
   const preview = useMemo(() => analyze(content), [content]);
 
@@ -68,11 +69,17 @@ export function ImportDialog() {
     if (!preview?.ok) return;
     setImporting(true);
     setImportError(undefined);
+    setImportNote(undefined);
     try {
       const result = await postImport(content);
       await onImported(result.accountId);
-      setContent("");
-      setOpen(false);
+      if (result.suppressed) {
+        // nothing changed vs current state (§3a) — keep the dialog open with a note.
+        setImportNote("No changes detected — nothing new was imported.");
+      } else {
+        setContent("");
+        setOpen(false);
+      }
     } catch (err) {
       setImportError((err as Error).message);
     } finally {
@@ -100,7 +107,11 @@ export function ImportDialog() {
         <Textarea
           autoFocus
           value={content}
-          onChange={(event) => setContent(event.target.value)}
+          onChange={(event) => {
+            setContent(event.target.value);
+            setImportNote(undefined);
+            setImportError(undefined);
+          }}
           placeholder="Paste an OGLight export (JSON) here..."
           className="h-40 shrink-0 resize-none overflow-auto font-mono text-xs"
         />
@@ -141,6 +152,8 @@ export function ImportDialog() {
             {importError}
           </p>
         )}
+
+        {importNote && <p className="text-muted-foreground shrink-0 text-sm">{importNote}</p>}
 
         <DialogFooter className="shrink-0">
           <DialogClose asChild>

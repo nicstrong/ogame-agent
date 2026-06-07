@@ -8,6 +8,7 @@ export interface AccountRef {
 export interface ImportResult {
   ok: boolean;
   deduped: boolean;
+  suppressed: boolean;
   id: string;
   source: string;
   universeId: string;
@@ -76,6 +77,17 @@ export async function postImport(raw: string): Promise<ImportResult> {
     body: raw,
   });
   return asJson<ImportResult>(res);
+}
+
+/** Remove a celestial by emitting a tombstone fact for `celestial/{id}`. */
+export async function removeCelestial(ref: AccountRef, celestialId: string): Promise<void> {
+  await asJson(
+    await apiFetch(`/api/accounts/${enc(ref.universeId)}/${enc(ref.playerId)}/tombstone`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: `celestial/${celestialId}` }),
+    }),
+  );
 }
 
 export function sameAccount(a: AccountRef | undefined, b: AccountRef | undefined): boolean {

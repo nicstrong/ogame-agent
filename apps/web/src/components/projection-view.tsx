@@ -1,4 +1,7 @@
 import { type Celestial, type Coordinates, paths, type Projection } from "@ogame-agent/core";
+import { Trash2Icon } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { useAccounts } from "@/lib/accounts-context";
 import { camelToLabel, formatNumber } from "@/lib/format";
 
@@ -76,7 +79,21 @@ function ResourceRow({ id, celestial }: { id: string; celestial: Celestial }) {
 }
 
 function CelestialCard({ id, celestial }: { id: string; celestial: Celestial }) {
+  const { removeCelestial } = useAccounts();
+  const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const isMoon = celestial.type === "moon";
+
+  const handleRemove = async () => {
+    setRemoving(true);
+    try {
+      await removeCelestial(id);
+    } finally {
+      setRemoving(false);
+      setConfirming(false);
+    }
+  };
+
   return (
     <div className="bg-card rounded-lg border p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -86,9 +103,35 @@ function CelestialCard({ id, celestial }: { id: string; celestial: Celestial }) 
             {formatCoords(celestial.coordinates)}
           </span>
         </div>
-        <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 text-xs">
-          {isMoon ? "moon" : "planet"} · {id}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          <span className="text-muted-foreground rounded bg-muted px-1.5 py-0.5 text-xs">
+            {isMoon ? "moon" : "planet"} · {id}
+          </span>
+          {confirming ? (
+            <>
+              <Button size="sm" variant="destructive" disabled={removing} onClick={handleRemove}>
+                {removing ? "Removing…" : "Remove"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={removing}
+                onClick={() => setConfirming(false)}
+              >
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              title="Remove (emits a tombstone; history is kept)"
+              onClick={() => setConfirming(true)}
+            >
+              <Trash2Icon />
+            </Button>
+          )}
+        </div>
       </div>
       <div className="space-y-3">
         <ResourceRow id={id} celestial={celestial} />

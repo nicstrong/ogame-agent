@@ -78,19 +78,41 @@ projection + history update for the selected universe.
 
 ---
 
-## Phase 4 — Realtime + hardening
+## Phase 4 — Hardening: tombstone UX + redundant-save suppression
 
-> Only meaningful once the paste loop works end-to-end. Turns capture continuous and keeps history clean.
+> Self-contained server/web work — no userscript needed. Builds the suppression machinery now so
+> the Phase 5 auto-push lands on top of it; validated here with crafted imports.
 
 **Work**
 
-1. **OGLight mod** — a "copy for OGame-agent" button emitting the canonical envelope; then auto
-   **HTTP-push on save** hooked at OGLight's single write point (`GM_setValue`, architecture §2a),
-   hitting the same `POST /import`.
-2. **Redundant-save suppression** (architecture §3a): Gate 1 canonical-hash ingest dedup, Gate 2
-   fact-level diff vs projection, and the **resource continuous-fact policy** (rate-change /
-   prediction-deviation threshold). Raw log stays append-only; gates suppress _fact transactions_ only.
-3. **Tombstone UX** — viewer "remove planet" emits a manual tombstone fact.
+1. **Tombstone UX** — viewer "remove planet/moon" emits a manual tombstone fact (a `manual` import
+   with one `tombstone` fact), ingested → fold removes the subtree → viewer updates; history retained.
+2. **Redundant-save suppression** (architecture §3a):
+   - **Gate 2 (fold)** — history records a per-path entry only when the value actually changes
+     (tombstones always recorded). Falls out of the merge engine; keeps history free of redundant revisions.
+   - **Gate 1 (ingest)** — an import is _meaningful_ only if, vs the current projection, it changes a
+     structural fact, flips a production rate, deviates a resource beyond the threshold, or tombstones.
+     Non-meaningful saves are suppressed (not appended, no re-fold).
+   - **Resource continuous-fact policy** — resource amounts tick every save; admit only on
+     rate-change or `|actual − (amount + prod·Δt)| > threshold`. Threshold default set here, tuned in Phase 5.
+
+**Exit bar:** crafted imports prove it — identical/tick-only saves are suppressed; a building level,
+production-rate change, raid-sized resource drop, or tombstone is admitted; history gains no
+same-value revisions.
+
+---
+
+## Phase 5 — Realtime: OGLight auto-push
+
+> The only phase that touches the third-party userscript. Sits on top of Phase 4's suppression.
+
+**Work**
+
+1. **OGLight mod** — a "copy for OGame-agent" button emitting the canonical envelope (incl.
+   `planetNames`); then auto **HTTP-push on save** hooked at OGLight's single write point
+   (`GM_setValue`, architecture §2a), hitting the same `POST /import`.
+2. **Tune suppression thresholds** against real auto-push traffic (the resource-deviation policy from
+   Phase 4); confirm no redundant revisions while real events still register.
 
 **Exit bar:** auto-push while playing produces no redundant projection revisions for cosmetic/ticking
 saves, while real events (build completes, raid, manual spend) still register.

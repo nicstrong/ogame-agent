@@ -6,6 +6,7 @@ import {
   type HistoryEntry,
   type Import,
   importSchema,
+  isMeaningfulImport,
   type Projection,
   projectionSchema,
 } from "@ogame-agent/core";
@@ -114,13 +115,21 @@ export class ImportStore {
     return Object.fromEntries(history);
   }
 
-  /** Append, then refresh the materialized projection (no-op refresh on dedup). */
-  async ingest(imp: Import): Promise<{ deduped: boolean; projection: Projection }> {
+  /**
+   * Ingest an import: suppress no-op saves (architecture §3a Gate 1 + resource policy),
+   * otherwise append to the log and refresh the materialized projection.
+   */
+  async ingest(
+    imp: Import,
+  ): Promise<{ deduped: boolean; suppressed: boolean; projection: Projection }> {
+    const current = await this.getProjection(imp.accountId);
+    if (!isMeaningfulImport(current, imp.facts)) {
+      // changes nothing vs current state — don't grow the log or re-fold.
+      return { deduped: false, suppressed: true, projection: current };
+    }
     const { deduped } = await this.appendImport(imp);
-    const projection = deduped
-      ? await this.getProjection(imp.accountId)
-      : await this.rebuildProjection(imp.accountId);
-    return { deduped, projection };
+    const projection = deduped ? current : await this.rebuildProjection(imp.accountId);
+    return { deduped, suppressed: false, projection };
   }
 
   /** Discover every universe/account partition on disk. */
