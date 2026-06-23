@@ -48,6 +48,16 @@ function isLastRefreshPath(seg: string[]): boolean {
   return seg.length === 3 && seg[0] === "celestial" && seg[2] === "lastRefresh";
 }
 
+/** `account/rank` churns constantly; fold it when something real changed, never alone. */
+function isRankPath(seg: string[]): boolean {
+  return seg.length === 2 && seg[0] === "account" && seg[1] === "rank";
+}
+
+/** Volatile paths: carried along with a meaningful import, but never admit one by themselves. */
+function isVolatilePath(seg: string[]): boolean {
+  return isLastRefreshPath(seg) || isRankPath(seg);
+}
+
 function isResourceAmountPath(seg: string[]): boolean {
   return (
     seg.length === 5 && seg[0] === "celestial" && seg[2] === "resources" && seg[4] === "amount"
@@ -96,17 +106,21 @@ function resourceAmountMeaningful(
 }
 
 /**
- * True if applying `facts` to `state` would change anything worth recording:
+ * Return the subset of `facts` worth recording against `state`:
  *  - any tombstone,
  *  - a structural fact (building/research/coords/…/production/storage) whose value differs,
  *  - a resource amount that changed rate or deviated from the predicted tick beyond threshold.
- * `lastRefresh`-only / unchanged saves return false (suppress).
+ * Volatile facts (`lastRefresh`, `account/rank`) are carried along only when at least one
+ * non-volatile fact survived — so a tick-only / rank-drift-only save filters down to nothing.
+ *
+ * Used at two boundaries: Gate 1 (ingest decides whether to admit) and the stored fact list
+ * (so an admitted save doesn't fold redundant per-celestial resource ticks into history).
  */
-export function isMeaningfulImport(
+export function filterMeaningfulFacts(
   state: Projection,
   facts: Fact[],
   options: SuppressionOptions = {},
-): boolean {
+): Fact[] {
   const opts = { ...DEFAULTS, ...options };
 
   const incoming = new Map<string, Json>();
@@ -114,15 +128,37 @@ export function isMeaningfulImport(
     if (f.kind === "set") incoming.set(f.path, f.value);
   }
 
+  const kept: Fact[] = [];
+  const volatile: Fact[] = [];
   for (const f of facts) {
-    if (f.kind === "tombstone") return true;
-    const seg = splitPath(f.path);
-    if (isLastRefreshPath(seg)) continue; // volatile on its own
-    if (isResourceAmountPath(seg)) {
-      if (resourceAmountMeaningful(state, seg, f.value, incoming, opts)) return true;
+    if (f.kind === "tombstone") {
+      kept.push(f);
       continue;
     }
-    if (!valuesEqual(getByPath(state, seg), f.value)) return true; // structural change
+    const seg = splitPath(f.path);
+    if (isVolatilePath(seg)) {
+      volatile.push(f);
+      continue;
+    }
+    if (isResourceAmountPath(seg)) {
+      if (resourceAmountMeaningful(state, seg, f.value, incoming, opts)) kept.push(f);
+      continue;
+    }
+    if (!valuesEqual(getByPath(state, seg), f.value)) kept.push(f); // structural change
   }
-  return false;
+  if (kept.length > 0) kept.push(...volatile);
+  return kept;
+}
+
+/**
+ * True if applying `facts` to `state` would change anything worth recording.
+ * Thin wrapper over {@link filterMeaningfulFacts}; `lastRefresh`/rank-only or unchanged
+ * saves yield no meaningful facts and are suppressed.
+ */
+export function isMeaningfulImport(
+  state: Projection,
+  facts: Fact[],
+  options: SuppressionOptions = {},
+): boolean {
+  return filterMeaningfulFacts(state, facts, options).length > 0;
 }

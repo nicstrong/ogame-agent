@@ -7,11 +7,21 @@ import { paths } from "../facts/path.js";
 import { contentHash } from "./hash.js";
 import type { Adapter, ParseOptions } from "./types.js";
 
-/** OGLight resource keys → canonical resource name + companion storage/prod keys. */
-const RESOURCES: { oglight: string; canon: string; storage?: string; prod?: string }[] = [
-  { oglight: "metal", canon: "metal", storage: "metalStorage", prod: "prodmetal" },
-  { oglight: "crystal", canon: "crystal", storage: "crystalStorage", prod: "prodcrystal" },
-  { oglight: "deut", canon: "deuterium", storage: "deutStorage", prod: "proddeut" },
+/**
+ * OGLight resource keys → canonical resource name + companion storage/prod keys.
+ * `prod` is an ordered list of candidate source keys: real `myPlanets` entries carry
+ * both `prodMetal` (base rate, written at oglight.js:12239) and `prodmetal` (rate incl.
+ * lifeform bonus); moons carry only the camelCase form. Read the first one that exists.
+ */
+const RESOURCES: { oglight: string; canon: string; storage?: string; prod?: string[] }[] = [
+  { oglight: "metal", canon: "metal", storage: "metalStorage", prod: ["prodMetal", "prodmetal"] },
+  {
+    oglight: "crystal",
+    canon: "crystal",
+    storage: "crystalStorage",
+    prod: ["prodCrystal", "prodcrystal"],
+  },
+  { oglight: "deut", canon: "deuterium", storage: "deutStorage", prod: ["prodDeut", "proddeut"] },
   { oglight: "energy", canon: "energy" },
   { oglight: "food", canon: "food", storage: "foodStorage" },
   { oglight: "population", canon: "population" },
@@ -25,6 +35,16 @@ function asDict(value: unknown): Dict | undefined {
 
 function asNumber(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
+  return undefined;
+}
+
+/** Like {@link asNumber} but also parses numeric strings (e.g. header `rank: "432"`). */
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
   return undefined;
 }
 
@@ -48,12 +68,10 @@ function toIdString(value: unknown): string | undefined {
 function matches(parsed: unknown): boolean {
   const obj = asDict(parsed);
   if (!obj) return false;
+  // Require myPlanets (envelope `db.myPlanets` or bare top-level) so a stray object
+  // carrying only a `DBName` key can't be coerced into an empty OGLight import.
   const envelopeDb = asDict(obj.db);
-  return (
-    Boolean(envelopeDb && asDict(envelopeDb.myPlanets)) ||
-    typeof obj.DBName === "string" ||
-    Boolean(asDict(obj.myPlanets))
-  );
+  return Boolean(envelopeDb && asDict(envelopeDb.myPlanets)) || Boolean(asDict(obj.myPlanets));
 }
 
 /**
@@ -159,8 +177,9 @@ function emitCelestial(
     facts.push(setFact(paths.celestial.lifeform(id), lifeform));
   }
 
+  // A planet with no moon has moonID `0` (live data) or `-1`; only emit a real id.
   const moonId = toIdString(entry.moonID);
-  if (moonId !== undefined && moonId !== "-1") {
+  if (moonId !== undefined && moonId !== "-1" && moonId !== "0") {
     facts.push(setFact(paths.celestial.moonId(id), moonId));
   }
 
@@ -178,7 +197,11 @@ function emitCelestial(
         facts.push(setFact(paths.celestial.resource(id, r.canon, "storage"), storage));
     }
     if (r.prod) {
-      const prod = asNumber(entry[r.prod]);
+      let prod: number | undefined;
+      for (const key of r.prod) {
+        prod = asNumber(entry[key]);
+        if (prod !== undefined) break;
+      }
       if (prod !== undefined)
         facts.push(setFact(paths.celestial.resource(id, r.canon, "production"), prod));
     }
@@ -243,7 +266,7 @@ function parse(raw: string, options: ParseOptions = {}): Import {
   if (typeof accClass === "number" || typeof accClass === "string") {
     facts.push(setFact(paths.account.class(), accClass));
   }
-  const accRank = asNumber(account?.rank);
+  const accRank = toNumber(account?.rank); // live header carries rank as a string
   if (accRank !== undefined) facts.push(setFact(paths.account.rank(), accRank));
 
   // celestials

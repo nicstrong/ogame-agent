@@ -61,19 +61,32 @@ export function createApp(store: ImportStore = new ImportStore()) {
     playerId: c.req.param("playerId") ?? "",
   });
 
+  /** Reject empty / traversal segments before they reach the filesystem. */
+  const isSafeRef = (ref: AccountRef): boolean =>
+    [ref.universeId, ref.playerId].every(
+      (s) => s !== "" && s !== "." && s !== ".." && !s.includes("/") && !s.includes("\\"),
+    );
+
   app.get("/api/accounts/:universeId/:playerId/projection", async (c) => {
-    return c.json(await store.getProjection(refFrom(c)));
+    const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
+    return c.json(await store.getProjection(ref));
   });
 
   app.get("/api/accounts/:universeId/:playerId/history", async (c) => {
-    const history = await store.getHistory(refFrom(c));
+    const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
+    const history = await store.getHistory(ref);
     const path = c.req.query("path");
     if (path) return c.json({ path, entries: history[path] ?? [] });
     return c.json(history);
   });
 
   app.post("/api/accounts/:universeId/:playerId/rebuild", async (c) => {
-    return c.json(await store.rebuildProjection(refFrom(c)));
+    const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
+    const reparse = c.req.query("reparse") === "1" || c.req.query("reparse") === "true";
+    return c.json(await store.rebuildProjection(ref, { reparse }));
   });
 
   /**
@@ -82,6 +95,7 @@ export function createApp(store: ImportStore = new ImportStore()) {
    */
   app.post("/api/accounts/:universeId/:playerId/tombstone", async (c) => {
     const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
     let body: { path?: unknown };
     try {
       body = (await c.req.json()) as { path?: unknown };

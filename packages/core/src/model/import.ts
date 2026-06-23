@@ -29,8 +29,8 @@ export const importSchema = z.object({
   sourceVersion: z.string(),
   transport: transportSchema,
   reliability: reliabilitySchema,
-  /** ISO-8601 timestamp. */
-  importedAt: z.string(),
+  /** ISO-8601 timestamp; validated so fold ordering (a string compare) stays well-defined. */
+  importedAt: z.string().datetime({ offset: true }),
   /** domain-model version, for migrations. */
   schemaVersion: z.number().int(),
   /** verbatim payload, never destructively re-parsed. */

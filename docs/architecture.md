@@ -216,12 +216,14 @@ churn (`udb`/`pdb` spy/activity timestamps), and **continuously-ticking resource
   predicted** `amount + prod·Δt` beyond a threshold (fleet landed, raid, manual spend). Routine
   ticking becomes a no-op; real events are still captured.
 
-**Raw-log vs transactions.** Keep the raw import log append-only and cheap (NDJSON) — the gates
-suppress _fact transactions_ (history/projection writes), **not** raw logging. This preserves the
-"raw is the source of truth, projection is re-foldable" property while keeping history and the
-viewer free of redundant revisions. (Alternative — drop at ingest when the canonical hash is
-unchanged — is leaner on disk but loses the "saved at T, no change" audit trail; default to logging
-raw.)
+**Raw-log vs transactions (as implemented).** A save that changes nothing meaningful is **dropped
+at ingest** — not appended to the log, no re-fold. A save that _is_ meaningful is appended, but its
+stored `facts[]` are first trimmed to the meaningful subset (within-tolerance resource ticks and
+volatile churn removed); the verbatim `raw` envelope is always stored intact, so it remains the
+source of truth and the projection stays re-foldable. We deliberately chose dropping over the
+alternative — logging every raw save and suppressing only the _fact transactions_ — because keeping
+a raw line per cosmetic/ticking auto-push would dominate on-disk size (see the storage notes); the
+trade-off is that we lose a "saved at T, no change" audit trail, which is not worth its weight here.
 
 ## 4. Domain model (read model / merged projection)
 

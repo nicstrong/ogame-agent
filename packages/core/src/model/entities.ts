@@ -32,32 +32,38 @@ export const fieldsSchema = z.object({
   max: z.number().optional(),
 });
 
-export const celestialSchema = z.object({
-  type: celestialTypeSchema.optional(),
-  name: z.string().optional(),
-  coordinates: coordinatesSchema.optional(),
-  temperature: z.unknown().optional(),
-  fields: fieldsSchema.optional(),
-  diameter: z.number().optional(),
-  lifeform: z.union([z.number(), z.string()]).optional(),
-  /** OGame id of the linked moon, when this is a planet. */
-  moonId: z.string().optional(),
-  resources: resourcesSchema.optional(),
-  buildings: levelMapSchema.optional(),
-  ships: levelMapSchema.optional(),
-  defense: levelMapSchema.optional(),
-  /** per-celestial observation time (ms epoch) from OGLight lastRefresh, if present. */
-  lastRefresh: z.number().optional(),
-});
+export const celestialSchema = z
+  .object({
+    type: celestialTypeSchema.optional(),
+    name: z.string().optional(),
+    coordinates: coordinatesSchema.optional(),
+    temperature: z.unknown().optional(),
+    fields: fieldsSchema.optional(),
+    diameter: z.number().optional(),
+    lifeform: z.union([z.number(), z.string()]).optional(),
+    /** OGame id of the linked moon, when this is a planet. */
+    moonId: z.string().optional(),
+    resources: resourcesSchema.optional(),
+    buildings: levelMapSchema.optional(),
+    ships: levelMapSchema.optional(),
+    defense: levelMapSchema.optional(),
+    /** per-celestial observation time (ms epoch) from OGLight lastRefresh, if present. */
+    lastRefresh: z.number().optional(),
+    // `.passthrough()`: a fact path not enumerated above (a new adapter field, a future
+    // espionage/combat block) is preserved through fold→parse→disk, not silently dropped.
+  })
+  .passthrough();
 export type Celestial = z.infer<typeof celestialSchema>;
 
-export const accountSchema = z.object({
-  playerId: z.string().optional(),
-  name: z.string().optional(),
-  class: z.union([z.number(), z.string()]).optional(),
-  rank: z.number().optional(),
-  research: levelMapSchema.optional(),
-});
+export const accountSchema = z
+  .object({
+    playerId: z.string().optional(),
+    name: z.string().optional(),
+    class: z.union([z.number(), z.string()]).optional(),
+    rank: z.number().optional(),
+    research: levelMapSchema.optional(),
+  })
+  .passthrough();
 export type Account = z.infer<typeof accountSchema>;
 
 export const universeSchema = z.object({
@@ -83,8 +89,10 @@ export type Universe = z.infer<typeof universeSchema>;
  * The top-level merged projection produced by {@link foldImports}.
  * `celestial` is keyed by OGame celestial id.
  */
-export const projectionSchema = z.object({
-  account: accountSchema.optional(),
-  celestial: z.record(celestialSchema).optional(),
-});
+export const projectionSchema = z
+  .object({
+    account: accountSchema.optional(),
+    celestial: z.record(celestialSchema).optional(),
+  })
+  .passthrough();
 export type Projection = z.infer<typeof projectionSchema>;

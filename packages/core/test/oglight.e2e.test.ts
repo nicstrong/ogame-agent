@@ -17,7 +17,7 @@ describe("OGLight adapter (end-to-end)", () => {
     expect(imp.source).toBe("oglight");
     expect(imp.universeId).toBe("s1-en");
     expect(imp.accountId).toEqual({ universeId: "s1-en", playerId: "100000" });
-    expect(imp.sourceVersion).toBe("5.3.3");
+    expect(imp.sourceVersion).toBe("9.3.3");
     expect(imp.id).toBe(parse(raw).id); // deterministic
   });
 
@@ -34,30 +34,41 @@ describe("OGLight adapter (end-to-end)", () => {
     expect(imp.facts.some((f) => f.path.includes("11101"))).toBe(false);
   });
 
+  it("captures account rank from the string header field", () => {
+    const imp = parse(raw);
+    const { state } = foldImports([imp]);
+    const projection = projectionSchema.parse(state);
+    expect(projection.account?.rank).toBe(42);
+  });
+
   it("folds into a schema-valid projection with correct values", () => {
     const imp = parse(raw);
     const { state } = foldImports([imp]);
     const projection = projectionSchema.parse(state);
 
-    expect(projection.account?.research?.energyTechnology).toBe(14);
+    expect(projection.account?.research?.energyTechnology).toBe(11);
     expect(projection.account?.class).toBe(3);
 
     const planet = projection.celestial?.["33700001"];
     expect(planet?.type).toBe("planet");
-    expect(planet?.buildings?.metalMine).toBe(31);
-    expect(planet?.coordinates).toEqual({ galaxy: 1, system: 200, position: 8, type: "planet" });
-    expect(planet?.moonId).toBe("33800001");
-    expect(planet?.resources?.deuterium?.production).toBe(7.4);
-    expect(planet?.ships?.espionageProbe).toBe(40);
-    expect(planet?.defense?.rocketLauncher).toBe(200);
+    expect(planet?.buildings?.metalMine).toBe(25);
+    expect(planet?.coordinates).toEqual({ galaxy: 1, system: 320, position: 10, type: "planet" });
+    expect(planet?.moonId).toBe("33800001"); // numeric moonID coerced to string
+    expect(planet?.ships?.espionageProbe).toBe(2614);
+    expect(planet?.defense?.rocketLauncher).toBe(1700);
+    // production prefers the camelCase `prodMetal` (28.98) over lowercase `prodmetal` (99.99)
+    expect(planet?.resources?.metal?.production).toBe(28.98);
+    expect(planet?.resources?.deuterium?.production).toBe(6.23);
 
     const moon = projection.celestial?.["33800001"];
     expect(moon?.type).toBe("moon");
-    expect(moon?.buildings?.lunarBase).toBe(6);
+    expect(moon?.buildings?.lunarBase).toBe(1);
 
-    // moonID === '-1' must not produce a moonId; energy === null must be skipped
+    // moonID === 0 must not produce a moonId; energy === null must be skipped
     const planet2 = projection.celestial?.["33700002"];
     expect(planet2?.moonId).toBeUndefined();
     expect(planet2?.resources?.energy).toBeUndefined();
+    // falls back to lowercase `prodmetal` when camelCase is absent (matches moons/older data)
+    expect(planet2?.resources?.metal?.production).toBe(34.84);
   });
 });
