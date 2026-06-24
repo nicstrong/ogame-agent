@@ -2,7 +2,7 @@ import type { Fact, Json } from "../model/index.js";
 import { SCHEMA_VERSION, setFact } from "../model/index.js";
 import type { Import } from "../model/import.js";
 import { buildAccountId, buildUniverseId, parseCoords, parseDBName } from "../identity/index.js";
-import { catalogEntryForOgameId, isLifeformOgameId } from "../catalog/index.js";
+import { catalogEntryForOgameId } from "../catalog/index.js";
 import { paths } from "../facts/path.js";
 import { contentHash } from "./hash.js";
 import type { Adapter, ParseOptions } from "./types.js";
@@ -207,11 +207,12 @@ function emitCelestial(
     }
   }
 
-  // numeric-id blocks: buildings / ships / defense (per-celestial) and research (account-wide)
+  // numeric-id blocks: buildings / ships / defense / lifeform (per-celestial) and
+  // research (account-wide). Lifeform buildings & research are per-celestial because the
+  // data is denormalised per planet and inactive-lifeform blocks still carry real levels.
   for (const [rawKey, value] of Object.entries(entry)) {
     const numId = Number(rawKey);
     if (!Number.isInteger(numId)) continue;
-    if (isLifeformOgameId(numId)) continue; // lifeform depth deferred (v1)
     const level = asNumber(value);
     if (level === undefined) continue;
     const cat = catalogEntryForOgameId(numId);
@@ -226,12 +227,47 @@ function emitCelestial(
       case "defense":
         facts.push(setFact(paths.celestial.defense(id, cat.key), level));
         break;
+      case "lifeformBuilding":
+        facts.push(setFact(paths.celestial.lifeformBuilding(id, cat.key), level));
+        break;
+      case "lifeformResearch":
+        facts.push(setFact(paths.celestial.lifeformResearch(id, cat.key), level));
+        break;
       case "research":
         // account-scoped: collect, emit once after all celestials (architecture §2a)
         accountResearch.set(cat.key, level);
         break;
     }
   }
+}
+
+/**
+ * Emit own-account score + rankings from `db.udb[playerId].score` (OGLight's highscore cache).
+ * The `globalRanking` here supersedes the volatile header `account/rank`; it is emitted after the
+ * header so it wins on fold (last fact within an import wins). No-op when udb/self/score is absent.
+ */
+function emitScore(db: Dict, playerId: string, facts: Fact[]) {
+  const self = asDict(asDict(db.udb)?.[playerId]);
+  const score = asDict(self?.score);
+  if (!score) return;
+  const keys = [
+    "global",
+    "economy",
+    "research",
+    "military",
+    "lifeform",
+    "globalRanking",
+    "economyRanking",
+    "researchRanking",
+    "militaryRanking",
+    "lifeformRanking",
+  ];
+  for (const key of keys) {
+    const v = asNumber(score[key]);
+    if (v !== undefined) facts.push(setFact(paths.account.score(key), v));
+  }
+  const rank = asNumber(score.globalRanking);
+  if (rank !== undefined) facts.push(setFact(paths.account.rank(), rank));
 }
 
 function parse(raw: string, options: ParseOptions = {}): Import {
@@ -268,6 +304,9 @@ function parse(raw: string, options: ParseOptions = {}): Import {
   }
   const accRank = toNumber(account?.rank); // live header carries rank as a string
   if (accRank !== undefined) facts.push(setFact(paths.account.rank(), accRank));
+
+  // own-account score + rankings from udb (supersedes the volatile header rank above)
+  emitScore(db, playerId, facts);
 
   // celestials
   for (const [id, rawEntry] of Object.entries(myPlanets)) {

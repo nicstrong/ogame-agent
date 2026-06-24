@@ -19,6 +19,8 @@ export const paths = {
     rank: () => "account/rank",
     playerId: () => "account/playerId",
     research: (key: string) => joinPath("account", "research", key),
+    /** highscore score/ranking subfields from `udb` (e.g. `global`, `globalRanking`). */
+    score: (key: string) => joinPath("account", "score", key),
   },
   celestial: {
     root: (id: string | number) => joinPath("celestial", id),
@@ -35,5 +37,9 @@ export const paths = {
     building: (id: string | number, key: string) => joinPath("celestial", id, "buildings", key),
     ship: (id: string | number, key: string) => joinPath("celestial", id, "ships", key),
     defense: (id: string | number, key: string) => joinPath("celestial", id, "defense", key),
+    lifeformBuilding: (id: string | number, key: string) =>
+      joinPath("celestial", id, "lifeformBuildings", key),
+    lifeformResearch: (id: string | number, key: string) =>
+      joinPath("celestial", id, "lifeformResearch", key),
   },
 } as const;

@@ -1,8 +1,16 @@
-import type { HistoryEntry, Projection } from "@ogame-agent/core";
+import type { HistoryEntry, Projection, ServerCatalogEntry } from "@ogame-agent/core";
 
 export interface AccountRef {
   universeId: string;
   playerId: string;
+}
+
+/** Per-universe localized name catalog served by the API. */
+export interface UniverseCatalog {
+  universeId: string;
+  updatedAt?: string;
+  sourceVersion?: string;
+  entries: ServerCatalogEntry[];
 }
 
 export interface ImportResult {
@@ -59,6 +67,10 @@ export async function getProjection(ref: AccountRef): Promise<Projection> {
   return asJson<Projection>(
     await apiFetch(`/api/accounts/${enc(ref.universeId)}/${enc(ref.playerId)}/projection`),
   );
+}
+
+export async function getUniverseCatalog(universeId: string): Promise<UniverseCatalog> {
+  return asJson<UniverseCatalog>(await apiFetch(`/api/universes/${enc(universeId)}/catalog`));
 }
 
 export async function getHistory(ref: AccountRef, path: string): Promise<HistoryEntry[]> {

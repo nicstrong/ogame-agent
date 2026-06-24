@@ -140,7 +140,25 @@
         "401": 1000
       }
     },
-    "udb": {},
+    "udb": {
+      "100000": {
+        "uid": 100000,
+        "name": "Tester",
+        "status": "n",
+        "score": {
+          "global": 335426,
+          "economy": 172985,
+          "research": 40819,
+          "lifeform": 29968,
+          "military": 39066,
+          "globalRanking": 22,
+          "economyRanking": 30,
+          "researchRanking": 25,
+          "militaryRanking": 40,
+          "lifeformRanking": 18
+        }
+      }
+    },
     "pdb": {},
     "tdb": {}
   }

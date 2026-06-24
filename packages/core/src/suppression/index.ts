@@ -53,9 +53,18 @@ function isRankPath(seg: string[]): boolean {
   return seg.length === 2 && seg[0] === "account" && seg[1] === "rank";
 }
 
+/**
+ * `account/score/*` (economy score especially) ticks on essentially every save; like rank it
+ * rides along with a real change but must never admit a save by itself, or it would defeat
+ * redundant-save suppression. Score history is therefore sampled at real-event times.
+ */
+function isScorePath(seg: string[]): boolean {
+  return seg.length === 3 && seg[0] === "account" && seg[1] === "score";
+}
+
 /** Volatile paths: carried along with a meaningful import, but never admit one by themselves. */
 function isVolatilePath(seg: string[]): boolean {
-  return isLastRefreshPath(seg) || isRankPath(seg);
+  return isLastRefreshPath(seg) || isRankPath(seg) || isScorePath(seg);
 }
 
 function isResourceAmountPath(seg: string[]): boolean {

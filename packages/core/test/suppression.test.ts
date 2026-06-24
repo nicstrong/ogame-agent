@@ -84,6 +84,24 @@ describe("isMeaningfulImport (§3a suppression)", () => {
     expect(kept.map((f) => f.path)).toContain("account/rank");
     expect(kept.map((f) => f.path)).toContain("account/research/energyTechnology");
   });
+
+  it("suppresses a score-only save (score never admits an import by itself)", () => {
+    const facts = [
+      setFact("account/score/global", 400_000),
+      setFact("account/score/economy", 200_000),
+    ];
+    expect(isMeaningfulImport(state, facts)).toBe(false);
+  });
+
+  it("carries score along when a real change rides with it", () => {
+    const facts = [
+      setFact("celestial/1/buildings/metalMine", 31),
+      setFact("account/score/global", 400_000),
+    ];
+    const kept = filterMeaningfulFacts(state, facts).map((f) => f.path);
+    expect(kept).toContain("celestial/1/buildings/metalMine");
+    expect(kept).toContain("account/score/global");
+  });
 });
 
 describe("filterMeaningfulFacts (§3a per-fact trimming)", () => {

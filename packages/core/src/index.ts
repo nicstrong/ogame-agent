@@ -4,3 +4,4 @@ export * from "./catalog/index.js";
 export * from "./facts/index.js";
 export * from "./adapters/index.js";
 export * from "./suppression/index.js";
+export * from "./value/msu.js";

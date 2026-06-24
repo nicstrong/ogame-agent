@@ -5,14 +5,15 @@ each phase is a **runnable vertical slice** with an explicit exit bar. Risk is f
 Phase 1 (the fact/fold domain core); app work only begins once the core is proven against a real
 `window.ogl` dump.
 
-**Current scaffold (starting point):**
+**Original scaffold (starting point):**
 
 - Monorepo on Vite+ (`vp`). `pnpm-workspace.yaml` globs only `apps/*`.
 - `apps/web` — React + shadcn; import dialog is a stub (`// TODO: wire up import`,
   [import-dialog.tsx:21](../apps/web/src/components/import-dialog.tsx)).
 - `apps/api` — Hono with only `/api/health` ([app.ts](../apps/api/src/app.ts)).
 - `vendor/oglight.js`, `vendor/infocomplete.js` — reference plugin sources.
-- **`packages/core` does not exist yet** — greenfield.
+- **`packages/core` did not exist yet** — greenfield at the start of the plan. It now exists and
+  supplies the current fact/fold, adapter, suppression, and model contracts.
 
 Conventions: run `vp check` and `vp test` on every change (per [AGENTS.md](../AGENTS.md)). `packages/core`
 must stay **isomorphic** (no node-only or browser-only APIs) so web, API, and future MCP all import it.
@@ -116,6 +117,34 @@ same-value revisions.
 
 **Exit bar:** auto-push while playing produces no redundant projection revisions for cosmetic/ticking
 saves, while real events (build completes, raid, manual spend) still register.
+
+---
+
+## Phase 6 — Reports + intel capture
+
+> Message-page capture for raiding/reporting. This is intentionally parallel to the own-empire fold:
+> reports are immutable events first, and only carefully derived own-account facts cross into the
+> existing projection.
+
+**Work**
+
+1. **Report model** — add a `ReportEvent` schema and OGLight report parser in `packages/core`; keep
+   it separate from `Import` except for optional derived facts.
+2. **Capture API** — add Drizzle/SQLite report tables, `ReportStore`, plus `POST /api/report` and
+   `/report`; keep raw payload retention configurable. See
+   [capture-api-and-storage.md](capture-api-and-storage.md).
+3. **Read API** — list recent report summaries and fetch one report by id; raw payload behind an
+   explicit `?raw=1`.
+4. **OGLight mod hooks** — POST from `readSpyData` and `readCombatData`; dedup repeated pagination
+   visits by stable report id/content hash.
+5. **Intel join prep** — start capturing `db.udb`/`db.pdb` in the empire envelope or a sibling event
+   stream so reports can be ranked against player/planet metadata.
+6. **Drizzle migrations** — keep the report schema migratable from day one; add Postgres only if the
+   app outgrows single-user local SQLite.
+
+**Exit bar:** visiting/paginating messages inserts deduped espionage/combat events; the API can list
+them; raw retention can be switched from `full` to `hash-only`/`none` without changing the normalized
+query model.
 
 ---
 

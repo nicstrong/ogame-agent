@@ -11,7 +11,13 @@
  *   11xxx–14xxx   lifeform buildings/research (deferred in v1)
  */
 
-export type CatalogCategory = "building" | "research" | "ship" | "defense";
+export type CatalogCategory =
+  | "building"
+  | "research"
+  | "ship"
+  | "defense"
+  | "lifeformBuilding"
+  | "lifeformResearch";
 
 export interface CatalogEntry {
   id: number;
@@ -108,15 +114,84 @@ function buildIndex(): Map<number, CatalogEntry> {
 }
 
 const OGAME_ID_INDEX = buildIndex();
+const KEY_TO_ID = new Map<string, number>(
+  [...OGAME_ID_INDEX].map(([id, entry]) => [entry.key, id]),
+);
 
 /** Look up the canonical entry for an OGame numeric id, or `undefined` if unknown. */
 export function catalogEntryForOgameId(id: number): CatalogEntry | undefined {
-  return OGAME_ID_INDEX.get(id);
+  return OGAME_ID_INDEX.get(id) ?? lifeformCatalogEntry(id);
 }
 
-/** True for lifeform building/research id blocks (11xxx–14xxx), deferred in v1. */
+/**
+ * OGame numeric id for a canonical key, for stable display ordering (build/research order).
+ * Lifeform keys are `lf{id}`, so the id is recovered from the suffix.
+ */
+export function ogameIdForKey(key: string): number | undefined {
+  const known = KEY_TO_ID.get(key);
+  if (known !== undefined) return known;
+  if (key.startsWith("lf")) {
+    const id = Number(key.slice(2));
+    if (Number.isFinite(id)) return id;
+  }
+  return undefined;
+}
+
+/** True for lifeform building/research id blocks (11xxx–14xxx). */
 export function isLifeformOgameId(id: number): boolean {
   return id >= 11000 && id < 15000;
+}
+
+/**
+ * Lifeform ids are `1L1xx` (buildings) / `1L2xx` (research), with `L` ∈ 1..4 the lifeform.
+ * The hundreds digit selects the block. Canonical key is `lf{id}` — language-independent;
+ * the localised display name comes from the per-universe `serverData` catalog. Returns the
+ * lifeform (1..4) so callers can group a planet's blocks for display.
+ */
+export function lifeformOfOgameId(id: number): number | undefined {
+  if (!isLifeformOgameId(id)) return undefined;
+  return Math.floor(id / 1000) % 10;
+}
+
+function lifeformCatalogEntry(id: number): CatalogEntry | undefined {
+  if (!isLifeformOgameId(id)) return undefined;
+  const block = Math.floor((id % 1000) / 100); // 1 = building, 2 = research
+  const category: CatalogCategory | undefined =
+    block === 1 ? "lifeformBuilding" : block === 2 ? "lifeformResearch" : undefined;
+  if (!category) return undefined;
+  return { id, key: `lf${id}`, category };
+}
+
+/** Account class id → display name (OGLight `account.class`). */
+const ACCOUNT_CLASS_NAMES: Record<number, string> = {
+  1: "Collector",
+  2: "General",
+  3: "Discoverer",
+};
+
+/** Lifeform id → display name (`celestial.lifeform`). 0 = none assigned. */
+const LIFEFORM_NAMES: Record<number, string> = {
+  0: "None",
+  1: "Humans",
+  2: "Rocktal",
+  3: "Mechas",
+  4: "Kaelesh",
+};
+
+function nameFor(table: Record<number, string>, value: number | string | undefined) {
+  const id = typeof value === "string" ? Number(value) : value;
+  if (id === undefined || !Number.isFinite(id)) return undefined;
+  return table[id];
+}
+
+/** Display name for an account class id (accepts the string form OGLight sometimes sends). */
+export function accountClassName(value: number | string | undefined): string | undefined {
+  return nameFor(ACCOUNT_CLASS_NAMES, value);
+}
+
+/** Display name for a celestial lifeform id. */
+export function lifeformName(value: number | string | undefined): string | undefined {
+  return nameFor(LIFEFORM_NAMES, value);
 }
 
 export interface ServerCatalogEntry {
@@ -126,6 +201,23 @@ export interface ServerCatalogEntry {
   /** canonical key if the id is known, else undefined. */
   key?: string;
   category?: CatalogCategory;
+}
+
+/**
+ * Locate OGLight `serverData` in a parsed payload, handling both the capture envelope
+ * (`{ db: { serverData } }`) and the bare `db` from the Export button (`{ serverData }`).
+ * Returns `undefined` for shapes that don't carry it (e.g. manual tombstone payloads).
+ */
+export function serverDataFrom(parsed: unknown): Record<string, unknown> | undefined {
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const obj = parsed as Record<string, unknown>;
+  const db = obj.db;
+  const fromDb =
+    db && typeof db === "object" ? (db as Record<string, unknown>).serverData : undefined;
+  const serverData = fromDb ?? obj.serverData;
+  return serverData && typeof serverData === "object"
+    ? (serverData as Record<string, unknown>)
+    : undefined;
 }
 
 /**

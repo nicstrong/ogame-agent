@@ -47,6 +47,9 @@ export const celestialSchema = z
     buildings: levelMapSchema.optional(),
     ships: levelMapSchema.optional(),
     defense: levelMapSchema.optional(),
+    /** lifeform building/research levels, per celestial, keyed by `lf{ogameId}`. */
+    lifeformBuildings: levelMapSchema.optional(),
+    lifeformResearch: levelMapSchema.optional(),
     /** per-celestial observation time (ms epoch) from OGLight lastRefresh, if present. */
     lastRefresh: z.number().optional(),
     // `.passthrough()`: a fact path not enumerated above (a new adapter field, a future
@@ -55,6 +58,23 @@ export const celestialSchema = z
   .passthrough();
 export type Celestial = z.infer<typeof celestialSchema>;
 
+/** Highscore score + rankings from `udb`; every field optional (absence = unknown). */
+export const scoreSchema = z
+  .object({
+    global: z.number().optional(),
+    economy: z.number().optional(),
+    research: z.number().optional(),
+    military: z.number().optional(),
+    lifeform: z.number().optional(),
+    globalRanking: z.number().optional(),
+    economyRanking: z.number().optional(),
+    researchRanking: z.number().optional(),
+    militaryRanking: z.number().optional(),
+    lifeformRanking: z.number().optional(),
+  })
+  .passthrough();
+export type Score = z.infer<typeof scoreSchema>;
+
 export const accountSchema = z
   .object({
     playerId: z.string().optional(),
@@ -62,6 +82,7 @@ export const accountSchema = z
     class: z.union([z.number(), z.string()]).optional(),
     rank: z.number().optional(),
     research: levelMapSchema.optional(),
+    score: scoreSchema.optional(),
   })
   .passthrough();
 export type Account = z.infer<typeof accountSchema>;

@@ -29,16 +29,27 @@ describe("OGLight adapter (end-to-end)", () => {
     expect(research.filter((f) => f.path === "account/research/energyTechnology")).toHaveLength(1);
   });
 
-  it("ignores lifeform id blocks in v1", () => {
-    const imp = parse(raw);
-    expect(imp.facts.some((f) => f.path.includes("11101"))).toBe(false);
-  });
-
-  it("captures account rank from the string header field", () => {
+  it("emits lifeform buildings/research per-celestial", () => {
     const imp = parse(raw);
     const { state } = foldImports([imp]);
     const projection = projectionSchema.parse(state);
-    expect(projection.account?.rank).toBe(42);
+    const planet = projection.celestial?.["33700001"];
+    // 11101 is a lifeform-1 building, 12101 a lifeform-2 building (both present on this planet)
+    expect(planet?.lifeformBuildings?.lf11101).toBe(23);
+    expect(planet?.lifeformBuildings?.lf12101).toBe(31);
+    // lifeform blocks are per-celestial, never folded into account scope
+    expect(imp.facts.some((f) => f.path.startsWith("account/lifeform"))).toBe(false);
+  });
+
+  it("emits account score + rankings from udb, superseding the header rank", () => {
+    const imp = parse(raw);
+    const { state } = foldImports([imp]);
+    const projection = projectionSchema.parse(state);
+    expect(projection.account?.score?.global).toBe(335426);
+    expect(projection.account?.score?.economy).toBe(172985);
+    expect(projection.account?.score?.globalRanking).toBe(22);
+    // udb globalRanking (22) wins over the volatile header rank ("42")
+    expect(projection.account?.rank).toBe(22);
   });
 
   it("folds into a schema-valid projection with correct values", () => {

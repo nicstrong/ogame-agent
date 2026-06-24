@@ -56,6 +56,20 @@ export function createApp(store: ImportStore = new ImportStore()) {
     return c.json({ accounts: await store.listAccounts() });
   });
 
+  /** Reject empty / traversal segments before they reach the filesystem. */
+  const isSafeSegment = (s: string): boolean =>
+    s !== "" && s !== "." && s !== ".." && !s.includes("/") && !s.includes("\\");
+
+  /** Per-universe localized name catalog (from OGLight serverData). Empty list when none yet. */
+  app.get("/api/universes/:universeId/catalog", async (c) => {
+    const universeId = c.req.param("universeId") ?? "";
+    if (!isSafeSegment(universeId)) {
+      return c.json({ ok: false, error: "Invalid universe id" }, 400);
+    }
+    const catalog = await store.getUniverseCatalog(universeId);
+    return c.json(catalog ?? { universeId, entries: [] });
+  });
+
   const refFrom = (c: Context): AccountRef => ({
     universeId: c.req.param("universeId") ?? "",
     playerId: c.req.param("playerId") ?? "",

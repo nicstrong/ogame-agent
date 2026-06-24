@@ -1,17 +1,32 @@
-import type { Projection } from "@ogame-agent/core";
-import { createContext, type ReactNode, use, useCallback, useEffect, useState } from "react";
+import type { Projection, ServerCatalogEntry } from "@ogame-agent/core";
+import {
+  createContext,
+  type ReactNode,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   type AccountRef,
   getProjection,
+  getUniverseCatalog,
   listAccounts,
   removeCelestial as removeCelestialApi,
   sameAccount,
 } from "@/lib/api";
+import { type Labeler, makeLabeler } from "@/lib/labels";
 
 interface AccountsContextValue {
   accounts: AccountRef[];
   selected: AccountRef | undefined;
   projection: Projection | undefined;
+  /** Localized label resolver for the selected account's universe (camelCase fallback). */
+  label: Labeler;
+  /** Celestial currently shown in the planet detail (defaults to the first planet). */
+  activeCelestialId: string | undefined;
+  setActiveCelestial: (id: string) => void;
   loading: boolean;
   error: string | undefined;
   select: (ref: AccountRef) => void;
@@ -36,9 +51,33 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<AccountRef[]>([]);
   const [selected, setSelected] = useState<AccountRef | undefined>(undefined);
   const [projection, setProjection] = useState<Projection | undefined>(undefined);
+  const [catalog, setCatalog] = useState<ServerCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [historyPath, setHistoryPath] = useState<string | undefined>(undefined);
+  const [activeCelestialId, setActiveCelestialId] = useState<string | undefined>(undefined);
+
+  const label = useMemo(() => makeLabeler(catalog), [catalog]);
+
+  // Keep the active celestial valid: default to the first planet (by coordinates) whenever the
+  // projection changes and the current selection is gone (account switch, tombstone, first load).
+  useEffect(() => {
+    const celestial = projection?.celestial ?? {};
+    setActiveCelestialId((current) => {
+      if (current && celestial[current]) return current;
+      const planets = Object.entries(celestial)
+        .filter(([, c]) => c.type !== "moon")
+        .sort(([, a], [, b]) => {
+          const ca = a.coordinates;
+          const cb = b.coordinates;
+          if (!ca || !cb) return 0;
+          return ca.galaxy - cb.galaxy || ca.system - cb.system || ca.position - cb.position;
+        });
+      return planets[0]?.[0];
+    });
+  }, [projection]);
+
+  const setActiveCelestial = useCallback((id: string) => setActiveCelestialId(id), []);
 
   const refreshAccounts = useCallback(async () => {
     const list = await listAccounts();
@@ -76,6 +115,27 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [selected]);
+
+  // Load the per-universe localized-name catalog when the selected universe changes.
+  // Best-effort: a missing/failed catalog just falls back to camelCase labels.
+  useEffect(() => {
+    const universeId = selected?.universeId;
+    if (!universeId) {
+      setCatalog([]);
+      return;
+    }
+    let cancelled = false;
+    getUniverseCatalog(universeId)
+      .then((c) => {
+        if (!cancelled) setCatalog(c.entries);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.universeId]);
 
   const select = useCallback((ref: AccountRef) => setSelected(ref), []);
 
@@ -123,6 +183,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
         accounts,
         selected,
         projection,
+        label,
+        activeCelestialId,
+        setActiveCelestial,
         loading,
         error,
         select,

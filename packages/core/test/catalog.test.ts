@@ -3,6 +3,7 @@ import {
   buildServerCatalog,
   catalogEntryForOgameId,
   isLifeformOgameId,
+  lifeformOfOgameId,
 } from "../src/catalog/index.js";
 
 describe("catalog", () => {
@@ -27,6 +28,26 @@ describe("catalog", () => {
     expect(isLifeformOgameId(11101)).toBe(true);
     expect(isLifeformOgameId(14000)).toBe(true);
     expect(isLifeformOgameId(124)).toBe(false);
+  });
+
+  it("classifies lifeform building/research ids with lf{id} keys", () => {
+    expect(catalogEntryForOgameId(11101)).toMatchObject({
+      key: "lf11101",
+      category: "lifeformBuilding",
+    });
+    expect(catalogEntryForOgameId(11201)).toMatchObject({
+      key: "lf11201",
+      category: "lifeformResearch",
+    });
+    expect(catalogEntryForOgameId(14218)).toMatchObject({
+      key: "lf14218",
+      category: "lifeformResearch",
+    });
+    // lifeform digit identifies the owning lifeform (1..4)
+    expect(lifeformOfOgameId(11101)).toBe(1);
+    expect(lifeformOfOgameId(12101)).toBe(2);
+    expect(lifeformOfOgameId(14218)).toBe(4);
+    expect(lifeformOfOgameId(124)).toBeUndefined();
   });
 
   it("bootstraps localised names from serverData and ignores config keys", () => {

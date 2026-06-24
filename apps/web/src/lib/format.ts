@@ -10,6 +10,20 @@ export function formatNumber(value: number): string {
   return value.toLocaleString();
 }
 
+/** Compact magnitude, e.g. 149_650_000 → "149.7M", 4_420_000 → "4.42M". */
+export function formatCompact(value: number, digits = 1): string {
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: digits,
+  }).format(value);
+}
+
+/** Signed compact rate, e.g. 12_400 → "+12.4k/h", -50 → "-50/h". */
+export function formatRate(value: number): string {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatCompact(value)}/h`;
+}
+
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
