@@ -1,7 +1,8 @@
 import type { Fact, Json } from "../model/index.js";
 import { SCHEMA_VERSION, setFact } from "../model/index.js";
 import type { Import } from "../model/import.js";
-import { buildAccountId, buildUniverseId, parseCoords, parseDBName } from "../identity/index.js";
+import { asDict, asNumber, asString, toIdString, toNumber, type Dict } from "../coerce/index.js";
+import { buildAccountId, deriveHeaderIdentity, parseCoords } from "../identity/index.js";
 import { catalogEntryForOgameId } from "../catalog/index.js";
 import { paths } from "../facts/path.js";
 import { contentHash } from "./hash.js";
@@ -26,38 +27,6 @@ const RESOURCES: { oglight: string; canon: string; storage?: string; prod?: stri
   { oglight: "food", canon: "food", storage: "foodStorage" },
   { oglight: "population", canon: "population" },
 ];
-
-type Dict = Record<string, unknown>;
-
-function asDict(value: unknown): Dict | undefined {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as Dict) : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  return undefined;
-}
-
-/** Like {@link asNumber} but also parses numeric strings (e.g. header `rank: "432"`). */
-function toNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
-  }
-  return undefined;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
-
-/** Coerce a string|number id to a string; ignore anything else (e.g. stray objects). */
-function toIdString(value: unknown): string | undefined {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
-  return undefined;
-}
 
 /**
  * Structural check used by `detect` and the registry. Accepts both shapes:
@@ -112,34 +81,6 @@ function deriveBareDbIdentity(
       "bare-db OGLight payload: could not derive identity " +
         "(need serverData.serverFullID and a pdb self-entry, or pass universeId/playerId)",
     );
-  }
-  return { universeId, playerId };
-}
-
-function deriveIdentity(obj: Dict): { universeId: string; playerId: string } {
-  const dbName = asString(obj.DBName);
-  const server = asDict(obj.server);
-  const account = asDict(obj.account);
-
-  let universeId: string | undefined;
-  let playerId: string | undefined;
-
-  if (dbName) {
-    try {
-      const parsed = parseDBName(dbName);
-      universeId = parsed.universeId;
-      playerId = parsed.playerId;
-    } catch {
-      // fall through to header-derived identity
-    }
-  }
-  if (!universeId && server && server.id != null && typeof server.lang === "string") {
-    universeId = buildUniverseId({ id: server.id as string | number, lang: server.lang });
-  }
-  if (!playerId) playerId = toIdString(account?.id);
-
-  if (!universeId || !playerId) {
-    throw new Error("OGLight payload missing identity (need DBName or server+account)");
   }
   return { universeId, playerId };
 }
@@ -287,7 +228,7 @@ function parse(raw: string, options: ParseOptions = {}): Import {
   const db = isEnvelope ? (asDict(obj.db) ?? {}) : obj;
   const account = isEnvelope ? asDict(obj.account) : undefined;
   const { universeId, playerId } = isEnvelope
-    ? deriveIdentity(obj)
+    ? deriveHeaderIdentity(obj)
     : deriveBareDbIdentity(db, options);
   const myPlanets = asDict(db.myPlanets) ?? {};
 

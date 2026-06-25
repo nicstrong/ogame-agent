@@ -1,3 +1,4 @@
+import { asDict, toIdString } from "../coerce/index.js";
 import type {
   AccountId,
   CelestialId,
@@ -21,6 +22,44 @@ export function buildCelestialId(
   type: CelestialType,
 ): CelestialId {
   return { accountId, ogameId: String(ogameId), type };
+}
+
+/**
+ * Derive `{ universeId, playerId }` from an OGLight capture header: prefer `DBName`,
+ * fall back to `server + account`. Shared by the empire-import and report adapters
+ * (both carry the same envelope header). Does NOT handle bare-`db` payloads — those
+ * need roster inspection and stay in the OGLight adapter.
+ */
+export function deriveHeaderIdentity(header: {
+  DBName?: unknown;
+  server?: unknown;
+  account?: unknown;
+}): { universeId: UniverseId; playerId: string } {
+  const dbName = typeof header.DBName === "string" ? header.DBName : undefined;
+  const server = asDict(header.server);
+  const account = asDict(header.account);
+
+  let universeId: UniverseId | undefined;
+  let playerId: string | undefined;
+
+  if (dbName) {
+    try {
+      const parsed = parseDBName(dbName);
+      universeId = parsed.universeId;
+      playerId = parsed.playerId;
+    } catch {
+      // fall through to header-derived identity
+    }
+  }
+  if (!universeId && server && server.id != null && typeof server.lang === "string") {
+    universeId = buildUniverseId({ id: server.id as string | number, lang: server.lang });
+  }
+  if (!playerId) playerId = toIdString(account?.id);
+
+  if (!universeId || !playerId) {
+    throw new Error("payload missing identity (need DBName or server+account)");
+  }
+  return { universeId, playerId };
 }
 
 /**

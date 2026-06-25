@@ -1,3 +1,4 @@
+import { asNumber } from "../coerce/index.js";
 import type { Projection } from "../model/entities.js";
 import type { Fact } from "../model/fact.js";
 import type { Json } from "../model/json.js";
@@ -28,10 +29,6 @@ function valuesEqual(a: Json | undefined, b: Json): boolean {
   if (a === undefined) return false;
   if (a === b) return true;
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /** Read a nested projection value by fact-path segments, or undefined. */
