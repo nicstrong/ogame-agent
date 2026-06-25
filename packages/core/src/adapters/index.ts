@@ -8,6 +8,7 @@ export * from "./types.js";
 export * from "./detect.js";
 export { oglightAdapter } from "./oglight.js";
 export { infocompleteAdapter } from "./infocomplete.js";
+export { parseReport, type ParseReportOptions } from "./oglight-report.js";
 export { contentHash } from "./hash.js";
 
 // `manual` imports (e.g. tombstones from the viewer) are built directly, not parsed.
