@@ -11,10 +11,14 @@
   "dependencies": {
     "@hono/node-server": "^2.0.6",
     "@ogame-agent/core": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.27",
     "lowdb": "^7.0.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.22.4"
   }
 }

@@ -1,10 +1,21 @@
-import { contentHash, type Import, parse, SCHEMA_VERSION, tombstoneFact } from "@ogame-agent/core";
+import {
+  contentHash,
+  type Import,
+  parse,
+  parseReport,
+  SCHEMA_VERSION,
+  tombstoneFact,
+} from "@ogame-agent/core";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { ReportStore } from "./report-store.js";
 import { type AccountRef, ImportStore } from "./storage.js";
 
-export function createApp(store: ImportStore = new ImportStore()) {
+export function createApp(
+  store: ImportStore = new ImportStore(),
+  reportStore: ReportStore = new ReportStore(),
+) {
   const app = new Hono();
 
   app.use("*", logger());
@@ -51,6 +62,29 @@ export function createApp(store: ImportStore = new ImportStore()) {
   app.post("/api/import", importHandler);
   // Forward-compat alias for the future OGLight HTTP push (architecture §2a).
   app.post("/import", importHandler);
+
+  /**
+   * Ingest one OGLight message report (espionage/combat/probe) as an immutable event.
+   * Parsed by the shared core report adapter and stored in the report DB, bypassing the
+   * own-empire fold (capture-api-and-storage §2). Idempotent: re-captures dedup.
+   */
+  const reportHandler = async (c: Context) => {
+    const raw = await c.req.text();
+    if (!raw.trim()) {
+      return c.json({ ok: false, error: "Empty request body" }, 400);
+    }
+    try {
+      const event = parseReport(raw);
+      const result = reportStore.insert(event);
+      return c.json({ ok: true, ...result });
+    } catch (err) {
+      return c.json({ ok: false, error: (err as Error).message }, 400);
+    }
+  };
+
+  app.post("/api/report", reportHandler);
+  // Root alias for the userscript, mirroring `/import`.
+  app.post("/report", reportHandler);
 
   app.get("/api/accounts", async (c) => {
     return c.json({ accounts: await store.listAccounts() });
@@ -135,6 +169,38 @@ export function createApp(store: ImportStore = new ImportStore()) {
     };
     const { projection } = await store.ingest(imp);
     return c.json({ ok: true, path, projection });
+  });
+
+  /** Recent report summaries for an account, newest first. `?kind=` and `?limit=` optional. */
+  app.get("/api/accounts/:universeId/:playerId/reports", async (c) => {
+    const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
+    const kind = c.req.query("kind");
+    if (kind && kind !== "espionage" && kind !== "combat" && kind !== "probe") {
+      return c.json({ ok: false, error: "Invalid kind" }, 400);
+    }
+    const limitRaw = c.req.query("limit");
+    const limit = limitRaw === undefined ? undefined : Number(limitRaw);
+    const reports = reportStore.list(ref, { kind, limit });
+    return c.json({ reports });
+  });
+
+  /** One report by id; `?raw=1` includes the verbatim payload when it was retained. */
+  app.get("/api/accounts/:universeId/:playerId/reports/:reportId", async (c) => {
+    const ref = refFrom(c);
+    if (!isSafeRef(ref)) return c.json({ ok: false, error: "Invalid account ref" }, 400);
+    const reportId = c.req.param("reportId") ?? "";
+    const wantRaw = c.req.query("raw") === "1" || c.req.query("raw") === "true";
+    const report = reportStore.get(reportId, { raw: wantRaw });
+    // Scope the lookup to the account in the URL so ids don't leak across partitions.
+    if (
+      !report ||
+      report.universeId !== ref.universeId ||
+      report.accountId.playerId !== ref.playerId
+    ) {
+      return c.json({ ok: false, error: "Report not found" }, 404);
+    }
+    return c.json({ report });
   });
 
   app.notFound((c) => {

@@ -1,0 +1,55 @@
+CREATE TABLE `report_events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`universe_id` text NOT NULL,
+	`owner_player_id` text NOT NULL,
+	`kind` text NOT NULL,
+	`source` text NOT NULL,
+	`source_version` text,
+	`source_message_id` text,
+	`api_key` text,
+	`captured_at` text NOT NULL,
+	`observed_at` text,
+	`raw_hash` text NOT NULL,
+	`raw_retention` text NOT NULL,
+	`schema_version` integer NOT NULL,
+	`coords_g` integer,
+	`coords_s` integer,
+	`coords_p` integer,
+	`coords_type` text,
+	`target_player_id` text,
+	`target_player_name` text,
+	`target_player_status` text,
+	`target_activity` integer,
+	`target_is_active` integer,
+	`is_attacked` integer,
+	`age_seconds` integer,
+	`res_metal` integer,
+	`res_crystal` integer,
+	`res_deuterium` integer,
+	`loot_percent` real,
+	`fleet_value` integer,
+	`defense_value` integer,
+	`hidden_fleet` integer,
+	`hidden_defense` integer,
+	`result` text,
+	`is_own_planet` integer,
+	`is_attacker` integer,
+	`is_defender` integer,
+	`is_winner` integer,
+	`probe_only` integer,
+	`gain_metal` integer,
+	`gain_crystal` integer,
+	`gain_deuterium` integer,
+	`summary_json` text NOT NULL,
+	`created_at` text NOT NULL
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `report_events_message_uq` ON `report_events` (`universe_id`,`owner_player_id`,`kind`,`source_message_id`) WHERE "report_events"."source_message_id" is not null;--> statement-breakpoint
+CREATE INDEX `report_events_recent_idx` ON `report_events` (`universe_id`,`owner_player_id`,`kind`,`captured_at`);--> statement-breakpoint
+CREATE INDEX `report_events_target_idx` ON `report_events` (`universe_id`,`coords_g`,`coords_s`,`coords_p`,`observed_at`);--> statement-breakpoint
+CREATE TABLE `report_payloads` (
+	`report_id` text PRIMARY KEY NOT NULL,
+	`raw_json` text NOT NULL,
+	`stored_at` text NOT NULL,
+	FOREIGN KEY (`report_id`) REFERENCES `report_events`(`id`) ON UPDATE no action ON DELETE no action
+);
